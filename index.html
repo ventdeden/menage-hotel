@@ -995,6 +995,7 @@ function renderAdminDashboard(app, role){
       </div>
       <div class="actions">
         <button class="btn secondary" id="manage-staff-btn">Ménage (${STATE.staff.length})</button>
+        ${!isReception ? `<button class="btn secondary" id="manage-credentials-btn">Admin/Réception</button>` : ''}
         <button class="btn secondary" id="manage-laundry-btn">Collecte du linge (${STATE.laundryStaff.length})</button>
         <button class="btn secondary" id="history-btn">Historique</button>
         <button class="btn danger" id="reset-day-btn">Réinitialiser la journée</button>
@@ -1072,6 +1073,7 @@ function renderAdminDashboard(app, role){
       </div>` : ''}
 
       <div class="card-panel" id="staff-panel" style="display:none;"></div>
+      ${!isReception ? `<div class="card-panel" id="credentials-panel" style="display:none;"></div>` : ''}
       <div class="card-panel" id="laundry-staff-panel" style="display:none;"></div>
       <div class="card-panel" id="history-panel" style="display:none;"></div>
 
@@ -1091,6 +1093,16 @@ function renderAdminDashboard(app, role){
     staffPanel.style.display = staffPanelOpen ? 'block':'none';
     if(staffPanelOpen) renderStaffPanel(staffPanel, isReception);
   };
+
+  if(!isReception){
+    const credentialsPanel = document.getElementById('credentials-panel');
+    let credentialsPanelOpen = false;
+    document.getElementById('manage-credentials-btn').onclick = ()=>{
+      credentialsPanelOpen = !credentialsPanelOpen;
+      credentialsPanel.style.display = credentialsPanelOpen ? 'block':'none';
+      if(credentialsPanelOpen) renderCredentialsPanel(credentialsPanel);
+    };
+  }
 
   const laundryPanel = document.getElementById('laundry-staff-panel');
   let laundryPanelOpen = false;
@@ -1139,7 +1151,6 @@ const STAFF_TEAM_CFG = {
   label: 'Équipe de ménage',
   idPrefix: 'staff',
   listId: 'staff-list',
-  showGlobalPins: true,
   receptionInfo: "La réception peut assigner des chambres à l'équipe mais ne peut ni ajouter/retirer de membres, ni voir leurs codes personnels.",
   onRemove(id){
     Object.values(STATE.rooms).forEach(r=>{ r.assignedTo = ensureArray(r.assignedTo).filter(sid=>sid!==id); });
@@ -1150,7 +1161,6 @@ const LAUNDRY_TEAM_CFG = {
   label: 'Équipe collecte du linge',
   idPrefix: 'laundry',
   listId: 'laundry-list',
-  showGlobalPins: false,
   receptionInfo: "La réception peut consulter l'équipe collecte du linge mais ne peut ni ajouter/retirer de membres, ni voir leurs codes personnels.",
   onRemove(id){
     Object.values(STATE.rooms).forEach(r=>{
@@ -1178,24 +1188,6 @@ function renderTeamPanel(panel, isReception, cfg){
       <button class="btn" id="${cfg.idPrefix}-add-btn">Ajouter</button>
     </div>
     <div class="info-line">Chaque membre se connecte avec son nom et son code personnel.</div>
-    ${cfg.showGlobalPins ? `
-    <div class="staff-row">
-      <div class="name">Code admin</div>
-      <div class="pinlbl">Code : ${looksHashed(STATE.adminPin) ? 'à resaisir (ancien format)' : escapeHtml(STATE.adminPin)}</div>
-    </div>
-    <div class="staff-row">
-      <div class="name">Code réception</div>
-      <div class="pinlbl">Code : ${looksHashed(STATE.receptionPin) ? 'à resaisir (ancien format)' : escapeHtml(STATE.receptionPin)}</div>
-    </div>
-    <div class="inline-form">
-      <input type="text" id="new-admin-pin" placeholder="Nouveau code admin" maxlength="4" style="width:160px;" value="">
-      <button class="btn secondary" id="change-admin-pin-btn">Modifier le code admin</button>
-    </div>
-    <div class="inline-form">
-      <input type="text" id="new-reception-pin" placeholder="Nouveau code réception" maxlength="4" style="width:160px;" value="">
-      <button class="btn secondary" id="change-reception-pin-btn">Modifier le code réception</button>
-    </div>
-    ` : ''}
     `}
   `;
   const listEl = panel.querySelector(`#${cfg.listId}`);
@@ -1250,28 +1242,53 @@ function renderTeamPanel(panel, isReception, cfg){
     await saveAndRender();
     renderTeamPanel(panel, isReception, cfg);
   };
-  if(cfg.showGlobalPins){
-    panel.querySelector('#change-admin-pin-btn').onclick = async ()=>{
-      const val = panel.querySelector('#new-admin-pin').value.trim();
-      if(!/^\d{4}$/.test(val)){ showToast('Le code admin doit contenir 4 chiffres.'); return; }
-      STATE.adminPin = val;
-      await saveAndRender();
-      showToast('Code admin mis à jour.');
-      renderTeamPanel(panel, isReception, cfg);
-    };
-    panel.querySelector('#change-reception-pin-btn').onclick = async ()=>{
-      const val = panel.querySelector('#new-reception-pin').value.trim();
-      if(!/^\d{4}$/.test(val)){ showToast('Le code réception doit contenir 4 chiffres.'); return; }
-      STATE.receptionPin = val;
-      await saveAndRender();
-      showToast('Code réception mis à jour.');
-      renderTeamPanel(panel, isReception, cfg);
-    };
-  }
 }
 
 function renderStaffPanel(panel, isReception){ renderTeamPanel(panel, isReception, STAFF_TEAM_CFG); }
 function renderLaundryStaffPanel(panel, isReception){ renderTeamPanel(panel, isReception, LAUNDRY_TEAM_CFG); }
+
+/* =========================================================
+   PANNEAU ADMIN / RÉCEPTION
+   Panneau dédié (admin uniquement) pour consulter et modifier les codes
+   PIN de connexion admin et réception.
+   ========================================================= */
+function renderCredentialsPanel(panel){
+  panel.innerHTML = `
+    <div class="section-title">Codes Admin / Réception</div>
+    <div class="staff-row">
+      <div class="name">Code admin</div>
+      <div class="pinlbl">Code : ${looksHashed(STATE.adminPin) ? 'à resaisir (ancien format)' : escapeHtml(STATE.adminPin)}</div>
+    </div>
+    <div class="staff-row">
+      <div class="name">Code réception</div>
+      <div class="pinlbl">Code : ${looksHashed(STATE.receptionPin) ? 'à resaisir (ancien format)' : escapeHtml(STATE.receptionPin)}</div>
+    </div>
+    <div class="inline-form">
+      <input type="text" id="new-admin-pin" placeholder="Nouveau code admin" maxlength="4" style="width:160px;" value="">
+      <button class="btn secondary" id="change-admin-pin-btn">Modifier le code admin</button>
+    </div>
+    <div class="inline-form">
+      <input type="text" id="new-reception-pin" placeholder="Nouveau code réception" maxlength="4" style="width:160px;" value="">
+      <button class="btn secondary" id="change-reception-pin-btn">Modifier le code réception</button>
+    </div>
+  `;
+  panel.querySelector('#change-admin-pin-btn').onclick = async ()=>{
+    const val = panel.querySelector('#new-admin-pin').value.trim();
+    if(!/^\d{4}$/.test(val)){ showToast('Le code admin doit contenir 4 chiffres.'); return; }
+    STATE.adminPin = val;
+    await saveAndRender();
+    showToast('Code admin mis à jour.');
+    renderCredentialsPanel(panel);
+  };
+  panel.querySelector('#change-reception-pin-btn').onclick = async ()=>{
+    const val = panel.querySelector('#new-reception-pin').value.trim();
+    if(!/^\d{4}$/.test(val)){ showToast('Le code réception doit contenir 4 chiffres.'); return; }
+    STATE.receptionPin = val;
+    await saveAndRender();
+    showToast('Code réception mis à jour.');
+    renderCredentialsPanel(panel);
+  };
+}
 
 /* =========================================================
    HISTORIQUE (espace admin uniquement)
